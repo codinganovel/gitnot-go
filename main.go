@@ -18,7 +18,7 @@ import (
 	"time"
 	"io/ioutil"
 
-	"github.com/pmezard/go-difflib/difflib"
+	"github.com/codinganovel/go-difflib/difflib"
 )
 
 // --- Constants & paths ---
@@ -278,10 +278,14 @@ func formatDiffAsMarkdown(diffText string) string {
 		}
 		
 		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
-			removed = append(removed, fmt.Sprintf("L%d: %s", oldLn, strings.TrimSpace(line[1:])))
+			if strings.TrimSpace(line[1:]) != "" {
+				removed = append(removed, fmt.Sprintf("L%d: %s", oldLn, strings.TrimSpace(line[1:])))
+			}
 			oldLn++
 		} else if strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++") {
-			added = append(added, fmt.Sprintf("L%d: %s", newLn, strings.TrimSpace(line[1:])))
+			if strings.TrimSpace(line[1:]) != "" {
+				added = append(added, fmt.Sprintf("L%d: %s", newLn, strings.TrimSpace(line[1:])))
+			}
 			newLn++
 		} else {
 			// Context line or \ No newline at end of file

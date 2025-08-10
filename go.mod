@@ -2,4 +2,4 @@ module gitnot
 
 go 1.24.5
 
-require github.com/pmezard/go-difflib v1.0.0 // indirect
+require github.com/codinganovel/go-difflib v1.0.1

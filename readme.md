@@ -10,7 +10,7 @@ gitnot is built on a simple idea: versioning doesn't need to be complex. It's a 
 
 ### Build from source
 ```bash
-git clone https://github.com/yourusername/gitnot
+git clone https://github.com/codinganovel/gitnot
 cd gitnot
 go build -o gitnot .
 ```

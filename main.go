@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -16,20 +17,19 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"io/ioutil"
 
 	"github.com/codinganovel/go-difflib/difflib"
 )
 
 // --- Constants & paths ---
 const (
-	gitnotDir     = ".gitnot"
-	snapshotDir   = ".gitnot/snapshot"
-	changelogDir  = ".gitnot/changelogs"
-	deletedDir    = ".gitnot/deleted"
-	hashesFile    = ".gitnot/hashes.json"
-	versionFile   = ".gitnot/version.txt"
-	configFile    = ".gitnot/config.json"
+	gitnotDir    = ".gitnot"
+	snapshotDir  = ".gitnot/snapshot"
+	changelogDir = ".gitnot/changelogs"
+	deletedDir   = ".gitnot/deleted"
+	hashesFile   = ".gitnot/hashes.json"
+	versionFile  = ".gitnot/version.txt"
+	configFile   = ".gitnot/config.json"
 )
 
 // --- Config ---
@@ -170,7 +170,7 @@ func hashFile(p string) string {
 		return fmt.Sprintf("unreadable-%s", filepath.Base(p))
 	}
 	defer f.Close()
-	
+
 	h := sha1.New()
 	buf := make([]byte, 8192)
 	for {
@@ -238,15 +238,15 @@ func formatDiffAsMarkdown(diffText string) string {
 	if diffText == "" {
 		return "📄 File changed (no readable diff)\n"
 	}
-	
+
 	lines := strings.Split(diffText, "\n")
 	var added, removed []string
 	oldLn, newLn := 0, 0
 	i := 0
-	
+
 	for i < len(lines) {
 		line := lines[i]
-		
+
 		// New hunk header --- @@ -a,b +c,d @@
 		if strings.HasPrefix(line, "@@") {
 			parts := strings.Fields(line)
@@ -265,7 +265,7 @@ func formatDiffAsMarkdown(diffText string) string {
 			i++
 			continue
 		}
-		
+
 		// Look-ahead for identical -/+ pair (newline / whitespace change)
 		if strings.HasPrefix(line, "-") && i+1 < len(lines) &&
 			strings.HasPrefix(lines[i+1], "+") &&
@@ -276,7 +276,7 @@ func formatDiffAsMarkdown(diffText string) string {
 			i += 2
 			continue
 		}
-		
+
 		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
 			if strings.TrimSpace(line[1:]) != "" {
 				removed = append(removed, fmt.Sprintf("L%d: %s", oldLn, strings.TrimSpace(line[1:])))
@@ -296,7 +296,7 @@ func formatDiffAsMarkdown(diffText string) string {
 		}
 		i++
 	}
-	
+
 	var b strings.Builder
 	if len(added) > 0 {
 		b.WriteString("### ➕ Added\n")
@@ -314,7 +314,7 @@ func formatDiffAsMarkdown(diffText string) string {
 		}
 		b.WriteString("\n")
 	}
-	
+
 	return b.String()
 }
 
@@ -323,21 +323,31 @@ func formatDiffAsMarkdown(diffText string) string {
 func initGitnot() error {
 	// Create dirs
 	for _, d := range []string{snapshotDir, changelogDir, deletedDir} {
-		if err := os.MkdirAll(d, 0o755); err != nil { return err }
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return err
+		}
 	}
 	// Save default config if missing
 	if _, err := os.Stat(configFile); errors.Is(err, os.ErrNotExist) {
-		if err := saveJSON(configFile, defaultConfig); err != nil { return err }
+		if err := saveJSON(configFile, defaultConfig); err != nil {
+			return err
+		}
 	}
 
 	files, err := getAllTextFiles(".")
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	hashes := map[string]string{}
 	for _, f := range files {
 		rel := f
 		snap := filepath.Join(snapshotDir, rel)
-		if err := safeMkdirAllForFile(snap); err != nil { return err }
-		if err := copyFile(f, snap); err != nil { continue }
+		if err := safeMkdirAllForFile(snap); err != nil {
+			return err
+		}
+		if err := copyFile(f, snap); err != nil {
+			continue
+		}
 		hashes[rel] = hashFile(f)
 
 		// create initial changelog entry
@@ -345,8 +355,12 @@ func initGitnot() error {
 		_ = safeMkdirAllForFile(clPath)
 		_ = appendToFile(clPath, fmt.Sprintf("# %s — original v0.0\n", rel))
 	}
-	if err := saveJSON(hashesFile, hashes); err != nil { return err }
-	if err := writeVersion(0.0); err != nil { return err }
+	if err := saveJSON(hashesFile, hashes); err != nil {
+		return err
+	}
+	if err := writeVersion(0.0); err != nil {
+		return err
+	}
 	fmt.Printf("✨ Initialized gitnot at version 0.0\n")
 	fmt.Printf("📁 Tracking %d files\n", len(hashes))
 	return nil
@@ -357,23 +371,42 @@ func updateGitnot() error {
 		return fmt.Errorf("gitnot not initialized; run --init")
 	}
 	var oldHashes map[string]string
-	if err := loadJSON(hashesFile, &oldHashes); err != nil { oldHashes = map[string]string{} }
+	if err := loadJSON(hashesFile, &oldHashes); err != nil {
+		oldHashes = map[string]string{}
+	}
 	files, err := getAllTextFiles(".")
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	current := map[string]string{}
 	for _, f := range files {
 		current[f] = hashFile(f)
 	}
 	// detect changes
 	var newFiles, changedFiles, deletedFiles []string
-	for f := range current { if _, ok := oldHashes[f]; !ok { newFiles = append(newFiles, f) } }
-	for f, h := range current { if oh, ok := oldHashes[f]; ok && oh != h { changedFiles = append(changedFiles, f) } }
-	for f := range oldHashes { if _, ok := current[f]; !ok { deletedFiles = append(deletedFiles, f) } }
+	for f := range current {
+		if _, ok := oldHashes[f]; !ok {
+			newFiles = append(newFiles, f)
+		}
+	}
+	for f, h := range current {
+		if oh, ok := oldHashes[f]; ok && oh != h {
+			changedFiles = append(changedFiles, f)
+		}
+	}
+	for f := range oldHashes {
+		if _, ok := current[f]; !ok {
+			deletedFiles = append(deletedFiles, f)
+		}
+	}
 	if len(newFiles)+len(changedFiles)+len(deletedFiles) == 0 {
 		fmt.Println("✅ No changes detected")
 		return nil
 	}
-	ver, err := bumpVersion(); if err != nil { return err }
+	ver, err := bumpVersion()
+	if err != nil {
+		return err
+	}
 	ts := time.Now().Format("2006-01-02 15:04")
 
 	// handle new and modified files - update changelogs first
@@ -382,13 +415,13 @@ func updateGitnot() error {
 		_ = safeMkdirAllForFile(clPath)
 		_ = appendToFile(clPath, fmt.Sprintf("\n## v%.1f – %s\n📄 New file added.\n", ver, ts))
 	}
-	
+
 	for _, rel := range changedFiles {
 		oldP := filepath.Join(snapshotDir, rel)
 		newP := rel
 		clPath := filepath.Join(changelogDir, rel+".log")
 		_ = safeMkdirAllForFile(clPath)
-		
+
 		// Try to read files and generate diff
 		if _, err := os.Stat(oldP); err == nil {
 			diffText, _ := unifiedDiff(oldP, newP)
@@ -406,7 +439,7 @@ func updateGitnot() error {
 		clPath := filepath.Join(changelogDir, rel+".log")
 		_ = safeMkdirAllForFile(clPath)
 		_ = appendToFile(clPath, fmt.Sprintf("\n## v%.1f – %s\n🔻 File was deleted.\n", ver, ts))
-		
+
 		// move snapshot to deleted store
 		from := filepath.Join(snapshotDir, rel)
 		to := filepath.Join(deletedDir, rel)
@@ -437,7 +470,7 @@ func updateGitnot() error {
 					break
 				}
 			}
-			
+
 			if allOk {
 				// Atomic replacement
 				if err := os.RemoveAll(snapshotDir); err != nil {
@@ -456,7 +489,9 @@ func updateGitnot() error {
 	}
 
 	// save hashes
-	if err := saveJSON(hashesFile, current); err != nil { return err }
+	if err := saveJSON(hashesFile, current); err != nil {
+		return err
+	}
 	fmt.Printf("⬆ Version bumped → v%.1f\n", ver)
 	fmt.Printf("📝 %d files tracked\n", len(files))
 	return nil
@@ -469,51 +504,75 @@ func showStatus() error {
 	var oldHashes map[string]string
 	_ = loadJSON(hashesFile, &oldHashes)
 	files, err := getAllTextFiles(".")
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	current := map[string]string{}
 	for _, f := range files {
 		current[f] = hashFile(f)
 	}
 	var newFiles, changedFiles, deletedFiles []string
-	for f := range current { if _, ok := oldHashes[f]; !ok { newFiles = append(newFiles, f) } }
-	for f, h := range current { if oh, ok := oldHashes[f]; ok && oh != h { changedFiles = append(changedFiles, f) } }
-	for f := range oldHashes { if _, ok := current[f]; !ok { deletedFiles = append(deletedFiles, f) } }
+	for f := range current {
+		if _, ok := oldHashes[f]; !ok {
+			newFiles = append(newFiles, f)
+		}
+	}
+	for f, h := range current {
+		if oh, ok := oldHashes[f]; ok && oh != h {
+			changedFiles = append(changedFiles, f)
+		}
+	}
+	for f := range oldHashes {
+		if _, ok := current[f]; !ok {
+			deletedFiles = append(deletedFiles, f)
+		}
+	}
 	if len(newFiles)+len(changedFiles)+len(deletedFiles) == 0 {
 		fmt.Println("✅ No changes detected")
 		return nil
 	}
 	if len(newFiles) > 0 {
 		fmt.Printf("📄 New files (%d): %s\n", len(newFiles), strings.Join(preview(newFiles, 3), ", "))
-		if len(newFiles) > 3 { fmt.Printf("    ... and %d more\n", len(newFiles)-3) }
+		if len(newFiles) > 3 {
+			fmt.Printf("    ... and %d more\n", len(newFiles)-3)
+		}
 	}
 	if len(changedFiles) > 0 {
 		fmt.Printf("📝 Modified (%d): %s\n", len(changedFiles), strings.Join(preview(changedFiles, 3), ", "))
-		if len(changedFiles) > 3 { fmt.Printf("    ... and %d more\n", len(changedFiles)-3) }
+		if len(changedFiles) > 3 {
+			fmt.Printf("    ... and %d more\n", len(changedFiles)-3)
+		}
 	}
 	if len(deletedFiles) > 0 {
 		fmt.Printf("🗑️  Deleted (%d): %s\n", len(deletedFiles), strings.Join(preview(deletedFiles, 3), ", "))
-		if len(deletedFiles) > 3 { fmt.Printf("    ... and %d more\n", len(deletedFiles)-3) }
+		if len(deletedFiles) > 3 {
+			fmt.Printf("    ... and %d more\n", len(deletedFiles)-3)
+		}
 	}
 	return nil
 }
 
 func preview(ss []string, n int) []string {
-	if len(ss) <= n { return ss }
+	if len(ss) <= n {
+		return ss
+	}
 	return ss[:n]
 }
 
 func showVersion() error {
 	v, err := readVersion()
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	fmt.Printf("📌 Current version: v%.1f\n", v)
-	
+
 	// Display actually tracked files from hashes.json
 	var hashes map[string]string
 	if err := loadJSON(hashesFile, &hashes); err != nil {
 		fmt.Printf("⚠️ Could not load tracked files: %v\n", err)
 		return nil
 	}
-	
+
 	if len(hashes) == 0 {
 		fmt.Printf("📁 No files are currently being tracked\n")
 	} else {
@@ -528,7 +587,7 @@ func showVersion() error {
 			fmt.Printf("  • %s\n", file)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -564,20 +623,30 @@ Features:
 
 func copyFile(src, dst string) error {
 	srcF, err := os.Open(src)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer srcF.Close()
-	if err := safeMkdirAllForFile(dst); err != nil { return err }
+	if err := safeMkdirAllForFile(dst); err != nil {
+		return err
+	}
 	dstF, err := os.Create(dst)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer dstF.Close()
 	_, err = io.Copy(dstF, srcF)
 	return err
 }
 
 func appendToFile(p, text string) error {
-	if err := safeMkdirAllForFile(p); err != nil { return err }
+	if err := safeMkdirAllForFile(p); err != nil {
+		return err
+	}
 	f, err := os.OpenFile(p, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	defer f.Close()
 	_, err = f.WriteString(text)
 	return err
@@ -598,23 +667,32 @@ func main() {
 		showHelp()
 		return
 	case *initFlag:
-		if err := initGitnot(); err != nil { fmt.Println("❌", err); os.Exit(1) }
+		if err := initGitnot(); err != nil {
+			fmt.Println("❌", err)
+			os.Exit(1)
+		}
 		return
 	case *showFlag:
-		if err := showVersion(); err != nil { fmt.Println("❌", err); os.Exit(1) }
+		if err := showVersion(); err != nil {
+			fmt.Println("❌", err)
+			os.Exit(1)
+		}
 		return
 	case *statusFlag:
-		if err := showStatus(); err != nil { fmt.Println(err); os.Exit(1) }
+		if err := showStatus(); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
 		return
 	default:
-		if err := updateGitnot(); err != nil { 
+		if err := updateGitnot(); err != nil {
 			if os.IsPermission(err) {
 				fmt.Println("❌ Permission denied. Check file/folder permissions.")
 			} else {
 				fmt.Printf("❌ Error: %v\n", err)
 				fmt.Println("💡 Try 'gitnot --init' to reset if needed.")
 			}
-			os.Exit(1) 
+			os.Exit(1)
 		}
 	}
 }

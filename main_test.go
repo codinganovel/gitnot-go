@@ -13,18 +13,18 @@ func setupTestDir(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	
+
 	// Change to temp dir
 	originalDir, _ := os.Getwd()
 	if err := os.Chdir(tempDir); err != nil {
 		t.Fatalf("Failed to change to temp dir: %v", err)
 	}
-	
+
 	t.Cleanup(func() {
 		os.Chdir(originalDir)
 		os.RemoveAll(tempDir)
 	})
-	
+
 	return tempDir
 }
 
@@ -174,7 +174,7 @@ func TestChangeDetection(t *testing.T) {
 	// Initialize with some files
 	createTestFile(t, "test.txt", "original content")
 	createTestFile(t, "keep.txt", "unchanged")
-	
+
 	err := initGitnot()
 	if err != nil {
 		t.Fatalf("initGitnot failed: %v", err)
@@ -182,10 +182,10 @@ func TestChangeDetection(t *testing.T) {
 
 	// Modify file
 	createTestFile(t, "test.txt", "modified content")
-	
+
 	// Add new file
 	createTestFile(t, "new.txt", "new file content")
-	
+
 	// Delete a file
 	os.Remove("keep.txt")
 
@@ -193,12 +193,12 @@ func TestChangeDetection(t *testing.T) {
 	// Capture the change detection logic without relying on stdout
 	var oldHashes map[string]string
 	loadJSON(hashesFile, &oldHashes)
-	
+
 	files, err := getAllTextFiles(".")
 	if err != nil {
 		t.Fatalf("getAllTextFiles failed: %v", err)
 	}
-	
+
 	current := map[string]string{}
 	for _, f := range files {
 		current[f] = hashFile(f)
@@ -305,7 +305,7 @@ func TestIgnorePatterns(t *testing.T) {
 	for _, test := range tests {
 		result := shouldIgnore(test.path, test.patterns)
 		if result != test.expected {
-			t.Errorf("shouldIgnore(%q, %v) = %t, expected %t", 
+			t.Errorf("shouldIgnore(%q, %v) = %t, expected %t",
 				test.path, test.patterns, result, test.expected)
 		}
 	}
@@ -357,7 +357,7 @@ func TestFileExtensionFiltering(t *testing.T) {
 	// Check that text files are included
 	expectedFiles := []string{"test.txt", "script.go", "data.csv"}
 	foundFiles := make(map[string]bool)
-	
+
 	for _, file := range files {
 		foundFiles[file] = true
 	}
@@ -438,7 +438,7 @@ func TestIsUnderGitnot(t *testing.T) {
 		{".gitnot/subdir/file.txt", true},
 		{"file.txt", false},
 		{"subdir/file.txt", false},
-		{".gitnothing/file.txt", true}, // This will match due to HasPrefix behavior
+		{".gitnothing/file.txt", true},    // This will match due to HasPrefix behavior
 		{"other/.gitnot/file.txt", false}, // doesn't start with .gitnot
 	}
 

@@ -1,2 +1,4 @@
 github.com/codinganovel/go-difflib v1.0.1 h1:tM0MpWCw2gM3OmMDFrVjIu37Ws7cBF2nCprlrKH15Mk=
 github.com/codinganovel/go-difflib v1.0.1/go.mod h1:CwRp5l+NEAqk7Nk0JR5XOeQqtPqIBfj5OHxv8RcDifE=
+github.com/codinganovel/go-difflib v1.0.8 h1:Uc/8QmSZ+DNiyhzr9hfNOoTjdKAB+UQZ4p5eGEVjtKw=
+github.com/codinganovel/go-difflib v1.0.8/go.mod h1:CwRp5l+NEAqk7Nk0JR5XOeQqtPqIBfj5OHxv8RcDifE=
